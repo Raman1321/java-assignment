@@ -1,0 +1,100 @@
+public class Calculator {
+
+    // Method Overloading Examples
+    int add(int a, int b) {
+        return a + b;
+    }
+
+    double add(double a, double b) {
+        return a + b;
+    }
+
+    int add(int a, int b, int c) {
+        return a + b + c;
+    }
+
+    int subtract(int a, int b) {
+        return a - b;
+    }
+
+    double multiply(double a, double b) {
+        return a * b;
+    }
+
+    double divide(int a, int b) {
+        if (b == 0) {
+            System.out.println("Error: Cannot divide by zero!");
+            return 0;
+        }
+        return (double) a / b;
+    }
+}
+
+//user interface
+import java.util.Scanner;
+
+public class UserInterface {
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+        Calculator c = new Calculator();
+        int choice;
+
+        do {
+            System.out.println("\n--- Calculator Menu ---");
+            System.out.println("1. Add");
+            System.out.println("2. Subtract");
+            System.out.println("3. Multiply");
+            System.out.println("4. Divide");
+            System.out.println("5. Exit");
+            System.out.print("Enter your choice: ");
+            choice = sc.nextInt();
+
+            switch (choice) {
+                case 1:
+                    System.out.println("1. Two integers");
+                    System.out.println("2. Two doubles");
+                    System.out.println("3. Three integers");
+                    int type = sc.nextInt();
+
+                    if (type == 1) {
+                        System.out.print("Enter two integers: ");
+                        int a = sc.nextInt(), b = sc.nextInt();
+                        System.out.println("Result: " + c.add(a, b));
+                    } else if (type == 2) {
+                        System.out.print("Enter two doubles: ");
+                        double a = sc.nextDouble(), b = sc.nextDouble();
+                        System.out.println("Result: " + c.add(a, b));
+                    } else if (type == 3) {
+                        System.out.print("Enter three integers: ");
+                        int a = sc.nextInt(), b = sc.nextInt(), d = sc.nextInt();
+                        System.out.println("Result: " + c.add(a, b, d));
+                    } else System.out.println("Invalid choice!");
+                    break;
+
+                case 2:
+                    System.out.print("Enter two integers: ");
+                    System.out.println("Result: " + c.subtract(sc.nextInt(), sc.nextInt()));
+                    break;
+
+                case 3:
+                    System.out.print("Enter two doubles: ");
+                    System.out.println("Result: " + c.multiply(sc.nextDouble(), sc.nextDouble()));
+                    break;
+
+                case 4:
+                    System.out.print("Enter two integers: ");
+                    System.out.println("Result: " + c.divide(sc.nextInt(), sc.nextInt()));
+                    break;
+
+                case 5:
+                    System.out.println("Exiting... Goodbye!");
+                    break;
+
+                default:
+                    System.out.println("Invalid choice!");
+            }
+        } while (choice != 5);
+
+        sc.close();
+    }
+}
