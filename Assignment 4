@@ -1,0 +1,548 @@
+Files to create
+Book.java
+Member.java
+LibraryManager.java (contains main)
+these three files are saved in the same package/folder and compile/run LibraryManager.
+
+
+1) Book.java
+import java.util.Objects;
+
+/**
+ * Book class: represents a book record.
+ * Implements Comparable to allow sorting by title.
+ */
+public class Book implements Comparable<Book> {
+    private int bookId;
+    private String title;
+    private String author;
+    private String category;
+    private boolean isIssued;
+
+    public Book(int bookId, String title, String author, String category, boolean isIssued) {
+        this.bookId = bookId;
+        this.title = title;
+        this.author = author;
+        this.category = category;
+        this.isIssued = isIssued;
+    }
+
+    // Getters and setters
+    public int getBookId() { return bookId; }
+    public String getTitle() { return title; }
+    public String getAuthor() { return author; }
+    public String getCategory() { return category; }
+    public boolean isIssued() { return isIssued; }
+
+    public void markAsIssued() { this.isIssued = true; }
+    public void markAsReturned() { this.isIssued = false; }
+
+    public void displayBookDetails() {
+        System.out.printf("ID: %d | Title: %s | Author: %s | Category: %s | Issued: %s%n",
+                bookId, title, author, category, isIssued ? "Yes" : "No");
+    }
+
+    // Comparable -> sort by title (lexicographic)
+    @Override
+    public int compareTo(Book other) {
+        return this.title.compareToIgnoreCase(other.title);
+    }
+
+    // equals & hashCode based on bookId for use in Maps/Sets
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof Book)) return false;
+        Book b = (Book) o;
+        return bookId == b.bookId;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(bookId);
+    }
+
+    // Serialize to a single CSV line for books.txt
+    // Format: bookId|title|author|category|isIssued
+    public String toRecordLine() {
+        // replace any '|' in text to avoid breaking format
+        return bookId + "|" + escape(title) + "|" + escape(author) + "|" + escape(category) + "|" + isIssued;
+    }
+
+    public static Book fromRecordLine(String line) {
+        String[] parts = line.split("\\|", -1);
+        if (parts.length != 5) return null;
+        int id = Integer.parseInt(parts[0]);
+        String t = unescape(parts[1]);
+        String a = unescape(parts[2]);
+        String c = unescape(parts[3]);
+        boolean issued = Boolean.parseBoolean(parts[4]);
+        return new Book(id, t, a, c, issued);
+    }
+
+    private static String escape(String s) {
+        return s.replace("|", "/"); // simple escape
+    }
+
+    private static String unescape(String s) {
+        return s.replace("/", "|");
+    }
+}
+
+2) Member.java
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+
+/**
+ * Member class to represent library member.
+ * issuedBooks stores list of book IDs issued to this member.
+ */
+public class Member {
+    private int memberId;
+    private String name;
+    private String email;
+    private List<Integer> issuedBooks;
+
+    public Member(int memberId, String name, String email) {
+        this.memberId = memberId;
+        this.name = name;
+        this.email = email;
+        this.issuedBooks = new ArrayList<>();
+    }
+
+    // Getters / setters
+    public int getMemberId() { return memberId; }
+    public String getName() { return name; }
+    public String getEmail() { return email; }
+    public List<Integer> getIssuedBooks() { return issuedBooks; }
+
+    public void displayMemberDetails() {
+        System.out.printf("ID: %d | Name: %s | Email: %s | Issued Books: %s%n",
+                memberId, name, email, issuedBooks.isEmpty() ? "None" : issuedBooks.toString());
+    }
+
+    public void addIssuedBook(int bookId) {
+        if (!issuedBooks.contains(bookId)) {
+            issuedBooks.add(bookId);
+        }
+    }
+
+    public void returnIssuedBook(int bookId) {
+        issuedBooks.remove(Integer.valueOf(bookId));
+    }
+
+    // Serialize to CSV line for members.txt
+    // Format: memberId|name|email|bookId1,bookId2,...
+    public String toRecordLine() {
+        StringBuilder sb = new StringBuilder();
+        sb.append(memberId).append("|").append(escape(name)).append("|")
+          .append(escape(email)).append("|");
+        for (int i = 0; i < issuedBooks.size(); i++) {
+            if (i > 0) sb.append(",");
+            sb.append(issuedBooks.get(i));
+        }
+        return sb.toString();
+    }
+
+    public static Member fromRecordLine(String line) {
+        String[] parts = line.split("\\|", -1);
+        if (parts.length != 4) return null;
+        int id = Integer.parseInt(parts[0]);
+        String name = unescape(parts[1]);
+        String email = unescape(parts[2]);
+        Member m = new Member(id, name, email);
+        if (!parts[3].isEmpty()) {
+            String[] ids = parts[3].split(",");
+            for (String s : ids) {
+                if (!s.isEmpty()) {
+                    m.issuedBooks.add(Integer.parseInt(s));
+                }
+            }
+        }
+        return m;
+    }
+
+    private static String escape(String s) {
+        return s.replace("|", "/");
+    }
+
+    private static String unescape(String s) {
+        return s.replace("/", "|");
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof Member)) return false;
+        Member m = (Member) o;
+        return memberId == m.memberId;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(memberId);
+    }
+}
+
+3) LibraryManager.java
+import java.io.*;
+import java.util.*;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+
+/**
+ * LibraryManager: handles collections, file I/O, and menu.
+ * Uses:
+ * - Map<Integer, Book> books
+ * - Map<Integer, Member> members
+ * - Set<String> categories
+ *
+ * Persistence files: books.txt, members.txt (in working directory)
+ */
+public class LibraryManager {
+
+    private Map<Integer, Book> books = new HashMap<>();
+    private Map<Integer, Member> members = new HashMap<>();
+    private Set<String> categories = new HashSet<>();
+
+    private final String BOOKS_FILE = "books.txt";
+    private final String MEMBERS_FILE = "members.txt";
+
+    private Scanner sc = new Scanner(System.in);
+
+    // Simple email validation
+    private static final Pattern EMAIL_PATTERN = Pattern.compile("^[\\w._%+-]+@[\\w.-]+\\.[A-Za-z]{2,6}$");
+
+    public static void main(String[] args) {
+        LibraryManager lm = new LibraryManager();
+        lm.loadFromFile();
+        lm.mainMenu();
+    }
+
+    // Main menu loop
+    public void mainMenu() {
+        try {
+            while (true) {
+                System.out.println("Welcome to City Library Digital Management System");
+                System.out.println("1. Add Book");
+                System.out.println("2. Add Member");
+                System.out.println("3. Issue Book");
+                System.out.println("4. Return Book");
+                System.out.println("5. Search Books");
+                System.out.println("6. Sort Books");
+                System.out.println("7. Exit");
+                System.out.print("Enter your choice: ");
+
+                int choice = Integer.parseInt(sc.nextLine().trim());
+                switch (choice) {
+                    case 1: addBook(); break;
+                    case 2: addMember(); break;
+                    case 3: issueBook(); break;
+                    case 4: returnBook(); break;
+                    case 5: searchBooks(); break;
+                    case 6: sortBooksMenu(); break;
+                    case 7:
+                        saveToFile();
+                        System.out.println("Data saved. Exiting.");
+                        return;
+                    default: System.out.println("Invalid choice. Try again.");
+                }
+            }
+        } catch (NumberFormatException nfe) {
+            System.out.println("Invalid menu input - must be a number.");
+        } finally {
+            sc.close();
+        }
+    }
+
+    // Add a new book
+    public void addBook() {
+        try {
+            System.out.print("Enter Book Title: ");
+            String title = sc.nextLine().trim();
+            System.out.print("Enter Author: ");
+            String author = sc.nextLine().trim();
+            System.out.print("Enter Category: ");
+            String category = sc.nextLine().trim();
+
+            int newId = generateUniqueBookId();
+            Book book = new Book(newId, title, author, category, false);
+            books.put(newId, book);
+            categories.add(category.toLowerCase());
+            saveBooksToFile(); // persist immediately
+            System.out.println("Book added successfully with ID: " + newId);
+        } catch (Exception e) {
+            System.out.println("Error adding book: " + e.getMessage());
+        }
+    }
+
+    // Add new member with email validation
+    public void addMember() {
+        try {
+            System.out.print("Enter Member Name: ");
+            String name = sc.nextLine().trim();
+            System.out.print("Enter Member Email: ");
+            String email = sc.nextLine().trim();
+            if (!EMAIL_PATTERN.matcher(email).matches()) {
+                System.out.println("Invalid email format. Member not added.");
+                return;
+            }
+            int newId = generateUniqueMemberId();
+            Member m = new Member(newId, name, email);
+            members.put(newId, m);
+            saveMembersToFile();
+            System.out.println("Member added successfully with ID: " + newId);
+        } catch (Exception e) {
+            System.out.println("Error adding member: " + e.getMessage());
+        }
+    }
+
+    // Issue a book to a member
+    public void issueBook() {
+        try {
+            System.out.print("Enter Book ID to issue: ");
+            int bookId = Integer.parseInt(sc.nextLine().trim());
+            System.out.print("Enter Member ID: ");
+            int memberId = Integer.parseInt(sc.nextLine().trim());
+
+            Book book = books.get(bookId);
+            Member member = members.get(memberId);
+
+            if (book == null) {
+                System.out.println("Book not found.");
+                return;
+            }
+            if (member == null) {
+                System.out.println("Member not found.");
+                return;
+            }
+            if (book.isIssued()) {
+                System.out.println("Book is already issued.");
+                return;
+            }
+
+            // Issue
+            book.markAsIssued();
+            member.addIssuedBook(bookId);
+
+            // Persist both changes
+            saveBooksToFile();
+            saveMembersToFile();
+
+            System.out.println("Book ID " + bookId + " issued to Member ID " + memberId);
+        } catch (NumberFormatException nfe) {
+            System.out.println("Please enter valid numeric IDs.");
+        } catch (Exception e) {
+            System.out.println("Error issuing book: " + e.getMessage());
+        }
+    }
+
+    // Return a book
+    public void returnBook() {
+        try {
+            System.out.print("Enter Book ID to return: ");
+            int bookId = Integer.parseInt(sc.nextLine().trim());
+            System.out.print("Enter Member ID: ");
+            int memberId = Integer.parseInt(sc.nextLine().trim());
+
+            Book book = books.get(bookId);
+            Member member = members.get(memberId);
+
+            if (book == null) {
+                System.out.println("Book not found.");
+                return;
+            }
+            if (member == null) {
+                System.out.println("Member not found.");
+                return;
+            }
+            if (!book.isIssued()) {
+                System.out.println("Book is not currently issued.");
+                return;
+            }
+            if (!member.getIssuedBooks().contains(bookId)) {
+                System.out.println("This member does not have this book issued.");
+                return;
+            }
+
+            book.markAsReturned();
+            member.returnIssuedBook(bookId);
+
+            saveBooksToFile();
+            saveMembersToFile();
+
+            System.out.println("Book ID " + bookId + " returned by Member ID " + memberId);
+        } catch (NumberFormatException nfe) {
+            System.out.println("Please enter valid numeric IDs.");
+        } catch (Exception e) {
+            System.out.println("Error returning book: " + e.getMessage());
+        }
+    }
+
+    // Search books by title/author/category (case-insensitive substring match)
+    public void searchBooks() {
+        System.out.println("Search by: 1-Title 2-Author 3-Category");
+        System.out.print("Choice: ");
+        String choice = sc.nextLine().trim();
+        System.out.print("Enter search string: ");
+        String query = sc.nextLine().trim().toLowerCase();
+
+        List<Book> results = new ArrayList<>();
+        switch (choice) {
+            case "1":
+                results = books.values().stream()
+                        .filter(b -> b.getTitle().toLowerCase().contains(query))
+                        .collect(Collectors.toList());
+                break;
+            case "2":
+                results = books.values().stream()
+                        .filter(b -> b.getAuthor().toLowerCase().contains(query))
+                        .collect(Collectors.toList());
+                break;
+            case "3":
+                results = books.values().stream()
+                        .filter(b -> b.getCategory().toLowerCase().contains(query))
+                        .collect(Collectors.toList());
+                break;
+            default:
+                System.out.println("Invalid search option.");
+                return;
+        }
+
+        if (results.isEmpty()) {
+            System.out.println("No books found.");
+        } else {
+            results.forEach(Book::displayBookDetails);
+        }
+    }
+
+    // Sorting menu — demonstrates Comparable and Comparator
+    private void sortBooksMenu() {
+        System.out.println("Sort by: 1-Title (default Comparable) 2-Author 3-Category");
+        System.out.print("Choice: ");
+        String c = sc.nextLine().trim();
+        List<Book> list = new ArrayList<>(books.values());
+
+        switch (c) {
+            case "1":
+                Collections.sort(list); // uses Comparable -> title
+                break;
+            case "2":
+                list.sort(Comparator.comparing(Book::getAuthor, String.CASE_INSENSITIVE_ORDER));
+                break;
+            case "3":
+                list.sort(Comparator.comparing(Book::getCategory, String.CASE_INSENSITIVE_ORDER));
+                break;
+            default:
+                System.out.println("Invalid choice.");
+                return;
+        }
+        list.forEach(Book::displayBookDetails);
+    }
+
+    // Persistence: load all data from files at startup
+    public void loadFromFile() {
+        loadBooksFromFile();
+        loadMembersFromFile();
+        System.out.println("Loaded " + books.size() + " books and " + members.size() + " members from files.");
+    }
+
+    // Save both
+    public void saveToFile() {
+        saveBooksToFile();
+        saveMembersToFile();
+    }
+
+    // Books file I/O
+    private void loadBooksFromFile() {
+        File f = new File(BOOKS_FILE);
+        if (!f.exists()) return;
+
+        BufferedReader br = null;
+        try {
+            br = new BufferedReader(new FileReader(f));
+            String line;
+            while ((line = br.readLine()) != null) {
+                if (line.trim().isEmpty()) continue;
+                Book b = Book.fromRecordLine(line);
+                if (b != null) {
+                    books.put(b.getBookId(), b);
+                    categories.add(b.getCategory().toLowerCase());
+                }
+            }
+        } catch (IOException e) {
+            System.out.println("Error loading books: " + e.getMessage());
+        } finally {
+            try { if (br != null) br.close(); } catch (IOException ignored) {}
+        }
+    }
+
+    private void saveBooksToFile() {
+        BufferedWriter bw = null;
+        try {
+            bw = new BufferedWriter(new FileWriter(BOOKS_FILE));
+            for (Book b : books.values()) {
+                bw.write(b.toRecordLine());
+                bw.newLine();
+            }
+            bw.flush();
+        } catch (IOException e) {
+            System.out.println("Error saving books: " + e.getMessage());
+        } finally {
+            try { if (bw != null) bw.close(); } catch (IOException ignored) {}
+        }
+    }
+
+    // Members file I/O
+    private void loadMembersFromFile() {
+        File f = new File(MEMBERS_FILE);
+        if (!f.exists()) return;
+
+        BufferedReader br = null;
+        try {
+            br = new BufferedReader(new FileReader(f));
+            String line;
+            while ((line = br.readLine()) != null) {
+                if (line.trim().isEmpty()) continue;
+                Member m = Member.fromRecordLine(line);
+                if (m != null) {
+                    members.put(m.getMemberId(), m);
+                }
+            }
+        } catch (IOException e) {
+            System.out.println("Error loading members: " + e.getMessage());
+        } finally {
+            try { if (br != null) br.close(); } catch (IOException ignored) {}
+        }
+    }
+
+    private void saveMembersToFile() {
+        BufferedWriter bw = null;
+        try {
+            bw = new BufferedWriter(new FileWriter(MEMBERS_FILE));
+            for (Member m : members.values()) {
+                bw.write(m.toRecordLine());
+                bw.newLine();
+            }
+            bw.flush();
+        } catch (IOException e) {
+            System.out.println("Error saving members: " + e.getMessage());
+        } finally {
+            try { if (bw != null) bw.close(); } catch (IOException ignored) {}
+        }
+    }
+
+    // ID generators: ensure uniqueness by scanning current maps
+    private int generateUniqueBookId() {
+        int id = 100;
+        while (books.containsKey(id)) id++;
+        return id;
+    }
+
+    private int generateUniqueMemberId() {
+        int id = 200;
+        while (members.containsKey(id)) id++;
+        return id;
+    }
+}
